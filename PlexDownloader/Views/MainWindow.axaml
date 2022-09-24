@@ -1,0 +1,64 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:PlexDownloader.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        d:DesignWidth="300" d:DesignHeight="450"
+        Width="300" Height="450"
+        MinWidth="300" MinHeight="450"
+        x:Class="PlexDownloader.Views.MainWindow"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="PlexDownloader"
+        ExtendClientAreaToDecorationsHint="True"
+        TransparencyLevelHint="AcrylicBlur"
+        Background="Transparent" Foreground="White">
+
+  <Design.DataContext>
+    <vm:MainWindowViewModel/>
+  </Design.DataContext>
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="30"/>
+      <RowDefinition Height="50"/>
+      <RowDefinition Height="50"/>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="20"/>
+      <RowDefinition Height="75"/>
+    </Grid.RowDefinitions>
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="75"/>
+      <ColumnDefinition Width="*"/>
+    </Grid.ColumnDefinitions>
+    <ExperimentalAcrylicBorder IsHitTestVisible="False" Grid.ColumnSpan="2">
+      <ExperimentalAcrylicBorder.Material>
+        <ExperimentalAcrylicMaterial
+            BackgroundSource="Digger"
+            TintColor="Black"
+            TintOpacity="1"
+            MaterialOpacity="0.65" />
+      </ExperimentalAcrylicBorder.Material>
+      <TextBlock Text="PlexDownloader" Background="Transparent" HorizontalAlignment="Left" Padding="25,0,0,0" VerticalAlignment="Center"/>
+    </ExperimentalAcrylicBorder>
+    <ListBox Items="{Binding AwaitingDownload}" Grid.Row="3" Grid.RowSpan="2" Grid.ColumnSpan="2" Background="#40484848" >
+      <ListBox.ItemTemplate>
+        <DataTemplate>
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="50"/>
+              <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Image Source="{Binding Item1.Thumbnail}"/>
+            <TextBlock Text="{Binding Item1.Title}" Grid.Column="1"/>
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+    <ProgressBar Minimum="0" Maximum="100" Value="{Binding DownloadProgress}" Grid.Row="5" Grid.ColumnSpan="2" VerticalAlignment="Bottom" Background="Transparent" Margin="10,0,10,0"/>
+    <TextBlock Text="{Binding CurrentVid.Title}" Grid.Row="5"  Grid.ColumnSpan="2" VerticalAlignment="Top" Background="Transparent" HorizontalAlignment="Center"/>
+    <TextBlock Text="URL" Grid.Row="1"  Background="#40404040" VerticalAlignment="Center"/>
+    <TextBox Text="{Binding Input}" x:Name="InputTextBox" Grid.Row="1" Grid.Column="2" Margin="10" AcceptsReturn="True" />
+    <RadioButton Content="Video" GroupName="VideoOrAudio" IsChecked="{Binding VideoChecked}" Grid.Row="2"/>
+    <RadioButton Content="Audio" GroupName="VideoOrAudio" IsChecked="False" Grid.Row="2" Grid.Column="1"/>
+  </Grid>
+</Window>
