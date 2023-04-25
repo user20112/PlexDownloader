@@ -8,12 +8,13 @@ namespace PlexDownloader.ViewModels
     public class VideoViewModel : ReactiveObject
     {
         public Video UnderlyingVideo;
+        public IDownloadableInfo Info;
         private Avalonia.Media.Imaging.Bitmap _thumbnail;
-
         private string _title;
 
-        public VideoViewModel(Video video)
+        public VideoViewModel(Video video,IDownloadableInfo info)
         {
+            Info = info;
             UnderlyingVideo = video;
             Title = video.Title;
             Task.Run(() =>

@@ -3,6 +3,7 @@ using ReactiveUI;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,31 +13,56 @@ namespace PlexDownloader.ViewModels
     public class MainWindowViewModel : ViewModelBase
     {
         public VideoViewModel _currentVid;
+        private bool Open = true;
         public double _downloadProgress = 0;
         public bool _videoChecked = true;
+        public bool _treatAsSeriesChecked = false;
         private string _input = "";
         private DownloadUpdateProvider _provider;
-        private List<string> AudioURLS = new List<string>();
-        private string JsonSaveLocation = Path.Combine(Directory.GetParent(System.Reflection.Assembly.GetEntryAssembly().Location).FullName, "Queued");
-        private bool Open = true;
-        private string SaveLocation = Path.Combine(Directory.GetParent(System.Reflection.Assembly.GetEntryAssembly().Location).FullName, "Downloaded");
-        private List<string> VideoURLS = new List<string>();
+        private List<AudioInfo> AudiosPending = new List<AudioInfo>();
+        private List<SeriesVideoInfo> SeriesPending = new List<SeriesVideoInfo>();
+        private List<MovieVideoInfo> MoviesPending = new List<MovieVideoInfo>();
+        private List<string> EnteredStrings = new List<string>();
+        private List<AudioInfo> AudiosErrored = new List<AudioInfo>();
+        private List<SeriesVideoInfo> SeriesErrored = new List<SeriesVideoInfo>();
+        private List<MovieVideoInfo> MoviesErrored = new List<MovieVideoInfo>();
+
+        public static string JsonSaveLocation = Path.Combine(Directory.GetParent(System.Reflection.Assembly.GetEntryAssembly().Location).FullName, "Queued");
+        public static string SaveLocation = "Z:\\YoutubeSeries";
 
         public MainWindowViewModel()
         {
             if (!Directory.Exists(JsonSaveLocation))
                 Directory.CreateDirectory(JsonSaveLocation);
-            List<string> aurls = new List<string>();
-            List<string> vurls = new List<string>();
-            if (File.Exists(Path.Combine(JsonSaveLocation, "Videos.json")))
-                vurls = JsonConvert.DeserializeObject<List<string>>(File.ReadAllText(Path.Combine(JsonSaveLocation, "Videos.json")));
+            List<AudioInfo> audioUrls = new List<AudioInfo>();
+            List<SeriesVideoInfo> seriesUrls = new List<SeriesVideoInfo>();
+            List<MovieVideoInfo> movieUrls = new List<MovieVideoInfo>();
+            if (File.Exists(Path.Combine(JsonSaveLocation, "Series.json")))
+                seriesUrls = JsonConvert.DeserializeObject<List<SeriesVideoInfo>>(File.ReadAllText(Path.Combine(JsonSaveLocation, "Series.json")));
+            if (File.Exists(Path.Combine(JsonSaveLocation, "Series.json")))
+                movieUrls = JsonConvert.DeserializeObject<List<MovieVideoInfo>>(File.ReadAllText(Path.Combine(JsonSaveLocation, "Movies.json")));
             if (File.Exists(Path.Combine(JsonSaveLocation, "Audio.json")))
-                aurls = JsonConvert.DeserializeObject<List<string>>(File.ReadAllText(Path.Combine(JsonSaveLocation, "Audio.json")));
-            if (vurls.Count != 0)
-                AddVideoURLS(vurls.ToArray());
-            if (aurls.Count != 0)
-                AddAudioURLS(aurls.ToArray());
-            _provider = new DownloadUpdateProvider(this);
+                audioUrls = JsonConvert.DeserializeObject<List<AudioInfo>>(File.ReadAllText(Path.Combine(JsonSaveLocation, "Audio.json")));
+
+            if (File.Exists(Path.Combine(JsonSaveLocation, "SeriesErrored.json")))
+                SeriesErrored = JsonConvert.DeserializeObject<List<SeriesVideoInfo>>(File.ReadAllText(Path.Combine(JsonSaveLocation, "SeriesErrored.json")));
+            if (File.Exists(Path.Combine(JsonSaveLocation, "MoviesErrored.json")))
+                MoviesErrored = JsonConvert.DeserializeObject<List<MovieVideoInfo>>(File.ReadAllText(Path.Combine(JsonSaveLocation, "MoviesErrored.json")));
+            if (File.Exists(Path.Combine(JsonSaveLocation, "AudioErrored.json")))
+                AudiosErrored = JsonConvert.DeserializeObject<List<AudioInfo>>(File.ReadAllText(Path.Combine(JsonSaveLocation, "AudioErrored.json")));
+            if (File.Exists(Path.Combine(JsonSaveLocation, "EnteredStrings.json")))
+                EnteredStrings = JsonConvert.DeserializeObject<List<string>>(File.ReadAllText(Path.Combine(JsonSaveLocation, "EnteredStrings.json")));
+            Task.Run(async () =>
+            {
+                if (seriesUrls.Count > 0)
+                    await AddDownloadables(seriesUrls);
+                if (movieUrls.Count > 0)
+                    await AddDownloadables(movieUrls);
+                if (audioUrls.Count > 0)
+                    await AddDownloadables(audioUrls);
+                UpdateOnDisk();
+                _provider = new DownloadUpdateProvider(this);
+            });
             Task.Run(DownloadThread);
         }
 
@@ -63,35 +89,37 @@ namespace PlexDownloader.ViewModels
             get => _videoChecked;
             set => this.RaiseAndSetIfChanged(ref _videoChecked, value);
         }
-
-        private ObservableCollection<Tuple<VideoViewModel, string>> AwaitingDownload { get; set; } = new ObservableCollection<Tuple<VideoViewModel, string>>();
-
-        public void AddAudioURLS(string[] URLs)
+        public bool TreatAsSeriesChecked
         {
-            Task.Run(async () =>
-            {
-                int x = 0;
-                foreach (string url in URLs)
-                {
-                    AudioURLS.Add(url);
-                    AwaitingDownload.Add(new Tuple<VideoViewModel, string>(new VideoViewModel(await DownloadHelper.GetVideo(url)), "Audio"));
-                }
-                UpdateOnDisk();
-            });
+            get => _treatAsSeriesChecked;
+            set => this.RaiseAndSetIfChanged(ref _treatAsSeriesChecked, value);
         }
 
-        public void AddVideoURLS(string[] URLs)
+        private ObservableCollection<VideoViewModel> AwaitingDownload { get; set; } = new ObservableCollection<VideoViewModel>();
+
+        public async Task AddDownloadables(List<MovieVideoInfo> info)
         {
-            Task.Run(async () =>
+            foreach (var obj in info)
             {
-                int x = 0;
-                foreach (string url in URLs)
-                {
-                    VideoURLS.Add(url);
-                    AwaitingDownload.Add(new Tuple<VideoViewModel, string>(new VideoViewModel(await DownloadHelper.GetVideo(url)), "Video"));
-                }
-                UpdateOnDisk();
-            });
+                MoviesPending.Add(obj);
+                AwaitingDownload.Add(new VideoViewModel(await DownloadHelper.GetVideo(obj.URL), obj));
+            }
+        }
+        public async Task AddDownloadables(List<AudioInfo> info)
+        {
+            foreach (var obj in info)
+            {
+                AudiosPending.Add(obj);
+                AwaitingDownload.Add(new VideoViewModel(await DownloadHelper.GetVideo(obj.URL), obj));
+            }
+        }
+        public async Task AddDownloadables(List<SeriesVideoInfo> info)
+        {
+            foreach (var obj in info)
+            {
+                SeriesPending.Add(obj);
+                AwaitingDownload.Add(new VideoViewModel(await DownloadHelper.GetVideo(obj.URL), obj));
+            }
         }
 
         public async void temp()
@@ -106,8 +134,13 @@ namespace PlexDownloader.ViewModels
 
         public void UpdateOnDisk()
         {
-            File.WriteAllText(Path.Combine(JsonSaveLocation, "Video.json"), JsonConvert.SerializeObject(VideoURLS));
-            File.WriteAllText(Path.Combine(JsonSaveLocation, "Audio.json"), JsonConvert.SerializeObject(AudioURLS));
+            File.WriteAllText(Path.Combine(JsonSaveLocation, "Series.json"), JsonConvert.SerializeObject(SeriesPending));
+            File.WriteAllText(Path.Combine(JsonSaveLocation, "Movies.json"), JsonConvert.SerializeObject(MoviesPending));
+            File.WriteAllText(Path.Combine(JsonSaveLocation, "Audio.json"), JsonConvert.SerializeObject(AudiosPending));
+            File.WriteAllText(Path.Combine(JsonSaveLocation, "SeriesErrored.json"), JsonConvert.SerializeObject(SeriesErrored));
+            File.WriteAllText(Path.Combine(JsonSaveLocation, "MoviesErrored.json"), JsonConvert.SerializeObject(MoviesErrored));
+            File.WriteAllText(Path.Combine(JsonSaveLocation, "AudioErrored.json"), JsonConvert.SerializeObject(AudiosErrored));
+            File.WriteAllText(Path.Combine(JsonSaveLocation, "EnteredStrings.json"), JsonConvert.SerializeObject(EnteredStrings));
         }
 
         internal void Closing()
@@ -122,39 +155,104 @@ namespace PlexDownloader.ViewModels
             {
                 string input = Input.Replace("\r\n", "");
                 Input = "";
-                string[] urls = await DownloadHelper.GetAllUrls(input);
-                if (VideoChecked)
-                    AddVideoURLS(urls);
+                IDownloadableInfo[] urls = await DownloadHelper.GetDownloadables(input, TreatAsSeriesChecked);
+                if (urls[0] is MovieVideoInfo)
+                {
+                    List<MovieVideoInfo> items = new List<MovieVideoInfo>();
+                    foreach (var item in urls)
+                    {
+                        items.Add((MovieVideoInfo)item);
+                    }
+                    await AddDownloadables(items);
+                    UpdateOnDisk();
+                }
+                else if (urls[0] is SeriesVideoInfo)
+                {
+                    List<SeriesVideoInfo> items = new List<SeriesVideoInfo>();
+                    foreach (var item in urls)
+                    {
+                        items.Add((SeriesVideoInfo)item);
+                    }
+                    await AddDownloadables(items);
+                    UpdateOnDisk();
+                }
                 else
-                    AddAudioURLS(urls);
+                {
+                    List<AudioInfo> items = new List<AudioInfo>();
+                    foreach (var item in urls)
+                    {
+                        items.Add((AudioInfo)item);
+                    }
+                    await AddDownloadables(items);
+                    UpdateOnDisk();
+                }
             }
-            catch
+            catch (Exception ex)
             {
             }
         }
 
         private async void DownloadThread()
         {
+            int x = 0;
             while (Open)
             {
-                if (AwaitingDownload.Count > 0)
+                if (AwaitingDownload.Count > x)
                 {
-                    CurrentVid = AwaitingDownload[0].Item1;
-                    if (AwaitingDownload[0].Item2 == "Video")
+                    try
                     {
-                        await DownloadHelper.DownloadVideo(AwaitingDownload[0].Item1.UnderlyingVideo.Url, Path.Combine("Videos", SaveLocation), _provider);
-                        AwaitingDownload.RemoveAt(0);
-                        UpdateOnDisk();
+                        CurrentVid = AwaitingDownload[x];
+                        if (AwaitingDownload[x].Info is SeriesVideoInfo seriesInfo)
+                        {
+
+                            await DownloadHelper.DownloadSeriesStyleVideo(AwaitingDownload[x].UnderlyingVideo.Url, seriesInfo, _provider);
+                            AwaitingDownload.RemoveAt(x);
+                            SeriesPending.Remove(seriesInfo);
+                            UpdateOnDisk();
+                        }
+                        else if (AwaitingDownload[x].Info is MovieVideoInfo movieInfo)
+                        {
+                            await DownloadHelper.DownloadStandaloneVideo(AwaitingDownload[x].UnderlyingVideo.Url, movieInfo.Name, _provider);
+                            AwaitingDownload.RemoveAt(x);
+                            MoviesPending.Remove(movieInfo);
+                            UpdateOnDisk();
+                        }
+                        else if (AwaitingDownload[x].Info is AudioInfo audioInfo)
+                        {
+                            await DownloadHelper.DownloadAudio(AwaitingDownload[x].UnderlyingVideo.Url, audioInfo, _provider);
+                            AwaitingDownload.RemoveAt(x);
+                            AudiosPending.Remove(audioInfo);
+                            UpdateOnDisk();
+                        }
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        await DownloadHelper.DownloadAudio(AwaitingDownload[0].Item1.UnderlyingVideo.Url, Path.Combine("Songs", SaveLocation), _provider);
-                        AwaitingDownload.RemoveAt(0);
-                        UpdateOnDisk();
+                        if (AwaitingDownload[x].Info is SeriesVideoInfo seriesInfo)
+                        {
+                            AwaitingDownload.RemoveAt(x);
+                            SeriesPending.Remove(seriesInfo);
+                            SeriesErrored.Add(seriesInfo);
+                            UpdateOnDisk();
+                        }
+                        else if (AwaitingDownload[x].Info is MovieVideoInfo movieInfo)
+                        {
+                            AwaitingDownload.RemoveAt(x);
+                            MoviesPending.Remove(movieInfo);
+                            MoviesErrored.Add(movieInfo);
+                            UpdateOnDisk();
+                        }
+                        else if (AwaitingDownload[x].Info is AudioInfo audioInfo)
+                        {
+                            AwaitingDownload.RemoveAt(x);
+                            AudiosPending.Remove(audioInfo);
+                            AudiosErrored.Add(audioInfo);
+                            UpdateOnDisk();
+                        }
                     }
                 }
                 else
                 {
+                    x = 0;
                     CurrentVid = null;
                     DownloadProgress = 0;
                     Thread.Sleep(100);
