@@ -1,4 +1,5 @@
-﻿using PlexDownloader.ViewModels;
+﻿using PlexDownloader.Models;
+using PlexDownloader.ViewModels;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -16,23 +17,23 @@ namespace PlexDownloader
     public class DownloadHelper
     {
         private static YoutubeClient Client = new YoutubeClient();
-        public static async Task<string> DownloadAudio(string url, AudioInfo info, IProgress<double> progressProvider)
+        public static async Task<string> DownloadAudio(Wanted info, IProgress<double> progressProvider)
         {
             // Plex Music naming standard
             //Band/Album/TrackNumber - TrackName.mp3
-            return await DownloadAudio(url, Path.Combine(MainWindowViewModel.SaveLocation + "\\" + FileSafe(info.Artist) + "\\" + FileSafe(info.Album) + "\\" + info.TrackNumber.ToString() + "-" + FileSafe(info.TrackName) + ".mp3"), progressProvider);
+            return await DownloadAudio(info.ID, Path.Combine(MainWindowViewModel.SaveLocation + "\\" + FileSafe(info.ChannelName) + "\\" + FileSafe(info.PlaylistName) + "\\" + info.IndexInPlaylist.ToString() + "-" + FileSafe(info.VideoTitle) + ".mp3"), progressProvider);
         }
-        public static async Task<string> DownloadSeriesStyleVideo(string url, SeriesVideoInfo info, IProgress<double> progressProvider)
+        public static async Task<string> DownloadSeriesStyleVideo(Wanted info, IProgress<double> progressProvider)
         {
             // Plex series naming standard
             //ShowName/Season 02/ShowName – s02e17 – Optional_Info.mp4
-            return await DownloadVideo(url, Path.Combine(MainWindowViewModel.SaveLocation, FileSafe(info.Show) + "\\" + "Season " + info.Season.ToString() + "\\" + FileSafe(info.Show) + "-" + info.Season.ToString() + "e" + info.Episode.ToString() + "-" + FileSafe(info.EpisodeName)), progressProvider);
+            return await DownloadVideo(info.ID, Path.Combine(MainWindowViewModel.SaveLocation, FileSafe(info.ChannelName) + "\\" + "Season 01\\" + FileSafe(info.ChannelName) + "-01e" + info.IndexInPlaylist.ToString() + "-" + FileSafe(info.VideoTitle)), progressProvider);
         }
-        public static async Task<string> DownloadStandaloneVideo(string url, string name, IProgress<double> progressProvider)
+        public static async Task<string> DownloadStandaloneVideo(Wanted info, IProgress<double> progressProvider)
         {
             // Plex series naming standard
             //MovieName/MovieName.ext
-            return await DownloadVideo(url, Path.Combine(MainWindowViewModel.SaveLocation + "\\" + FileSafe(name) + "\\" + FileSafe(name) + ".mp4"), progressProvider);
+            return await DownloadVideo(info.ID, Path.Combine(MainWindowViewModel.SaveLocation + "\\" + FileSafe(info.VideoTitle) + "\\" + FileSafe(info.VideoTitle) + ".mp4"), progressProvider);
         }
         public static async Task<string> DownloadAudio(string url, string filePath, IProgress<double> progressProvider)
         {
@@ -120,44 +121,43 @@ namespace PlexDownloader
             }
             return false;
         }
-        public static async Task<IDownloadableInfo[]> GetPlaylistDownloadables(string url)
+        public static async Task<Detected[]> GetPlaylistDownloadables(Source source)
         {
-            int seasonValue = 1;
-            Playlist? playlist = await Client.Playlists.GetAsync(url);
+            Playlist? playlist = await Client.Playlists.GetAsync(source.YouTubeURL);
             IReadOnlyList<PlaylistVideo>? videos = await Client.Playlists.GetVideosAsync(playlist.Id);
-            IDownloadableInfo[] infos = new IDownloadableInfo[videos.Count];
+            Detected[] infos = new Detected[videos.Count];
             for (int x = 0; x < videos.Count; x++)
             {
-                SeriesVideoInfo info = new SeriesVideoInfo();
-                info.EpisodeName = videos[x].Title;
-                info.Episode = x + 1;
-                info.Season = seasonValue;
-                info.Show = playlist.Author.ChannelTitle + " " + playlist.Title;
-                info.URL = videos[x].Url;
+                Detected info = new Detected();
+                info.VideoTitle = videos[x].Title;
+                info.SourceID = source.ID;
+                info.IndexInPlaylist = x + 1;
+                info.PlaylistName = playlist.Title;
+                info.ChannelName = playlist.Author.ChannelTitle;
+                info.ID = videos[x].Id;
                 infos[x] = info;
             }
             return infos;
         }
-        public static async Task<IDownloadableInfo[]> GetChannelDownloadables(string url, bool treatAsSeries)
+        public static async Task<Detected[]> GetChannelDownloadables(Source source)
         {
-            if (treatAsSeries)
+            if ((SourceTypeEnum)source.SourceType == SourceTypeEnum.ChannelAsSeries)
             {
-                int seasonValue = 1;
                 YoutubeExplode.Channels.Channel? channel = null;
-                if (url.Contains("@"))
-                    channel = await Client.Channels.GetByHandleAsync(url);
+                if (source.YouTubeURL.Contains("@"))
+                    channel = await Client.Channels.GetByHandleAsync(source.YouTubeURL);
                 else
-                    channel = await Client.Channels.GetAsync(url);
+                    channel = await Client.Channels.GetAsync(source.YouTubeURL);
                 IReadOnlyList<PlaylistVideo>? videos = await Client.Channels.GetUploadsAsync(channel.Url);
-                IDownloadableInfo[] infos = new IDownloadableInfo[videos.Count];
+                Detected[] infos = new Detected[videos.Count];
                 for (int x = 0; x < videos.Count; x++)
                 {
-                    SeriesVideoInfo info = new SeriesVideoInfo();
-                    info.EpisodeName = videos[x].Title;
-                    info.Episode = x + 1;
-                    info.Season = seasonValue;
-                    info.Show = channel.Title;
-                    info.URL = videos[x].Url;
+                    Detected info = new Detected();
+                    info.SourceID = source.ID;
+                    info.VideoTitle = videos[x].Title;
+                    info.IndexInPlaylist = x + 1;
+                    info.ChannelName = channel.Title;
+                    info.ID = videos[x].Id;
                     infos[x] = info;
                 }
                 return infos;
@@ -165,45 +165,70 @@ namespace PlexDownloader
             else
             {
                 YoutubeExplode.Channels.Channel? channel = null;
-                if (url.Contains("@"))
-                    channel = await Client.Channels.GetByHandleAsync(url);
+                if (source.YouTubeURL.Contains("@"))
+                    channel = await Client.Channels.GetByHandleAsync(source.YouTubeURL);
                 else
-                    channel = await Client.Channels.GetAsync(url);
+                    channel = await Client.Channels.GetAsync(source.YouTubeURL);
                 IReadOnlyList<PlaylistVideo>? videos = await Client.Channels.GetUploadsAsync(channel.Url);
-                IDownloadableInfo[] infos = new IDownloadableInfo[videos.Count];
+                Detected[] infos = new Detected[videos.Count];
                 for (int x = 0; x < videos.Count; x++)
                 {
-                    MovieVideoInfo info = new MovieVideoInfo();
-                    info.Name = videos[x].Title;
-                    info.URL = videos[x].Url;
+                    Detected info = new Detected();
+                    info.SourceID = source.ID;
+                    info.VideoTitle = videos[x].Title;
+                    info.IndexInPlaylist = x + 1;
+                    info.ChannelName = channel.Title;
+                    info.ID = videos[x].Id;
                     infos[x] = info;
                 }
                 return infos;
             }
         }
-        public static async Task<IDownloadableInfo[]> GetVideoDownloadable(string url)
+
+        internal static async Task<string> GetSourceName(Source source)
         {
-            IDownloadableInfo[] infos = new IDownloadableInfo[1];
-            MovieVideoInfo? info = new MovieVideoInfo();
-            info.URL = url;
-            Video? video = await Client.Videos.GetAsync(url);
-            info.Name = video.Title;
+            switch ((SourceTypeEnum)source.SourceType)
+            {
+                case SourceTypeEnum.ChannelAsSeries:
+                case SourceTypeEnum.ChannelAsIndividuals:
+                    return (await Client.Channels.GetAsync(source.YouTubeURL)).Title;
+                case SourceTypeEnum.PlaylistAsSeries:
+                case SourceTypeEnum.PlaylistAsIndividuals:
+                    var playlist = await Client.Playlists.GetAsync(source.YouTubeURL);
+                    return playlist.Author.ChannelTitle + ": " + playlist.Title;
+                case SourceTypeEnum.IndividualVideo:
+                case SourceTypeEnum.Audio:
+                    return (await Client.Videos.GetAsync(source.YouTubeURL)).Title;
+            }
+            return "";
+        }
+
+        public static async Task<Detected[]> GetVideoDownloadable(Source source)
+        {
+            Detected[] infos = new Detected[1];
+            Video? video = await Client.Videos.GetAsync(source.YouTubeURL);
+            Detected info = new Detected();
+            info.SourceID = source.ID;
+            info.VideoTitle = video.Title;
+            info.IndexInPlaylist = 0;
+            info.ChannelName = video.Author.ChannelTitle;
+            info.ID = video.Id;
             infos[0] = info;
             return infos;
         }
-        public static async Task<IDownloadableInfo[]> GetDownloadables(string url, bool treatChannelAsSeries)
+        public static async Task<Detected[]> GetDownloadables(Source source)
         {
-            if (await IsChannel(url))
+            if ((SourceTypeEnum)source.SourceType == SourceTypeEnum.ChannelAsIndividuals || (SourceTypeEnum)source.SourceType == SourceTypeEnum.ChannelAsSeries)
             {
-                return await GetChannelDownloadables(url, treatChannelAsSeries);
+                return await GetChannelDownloadables(source);
             }
-            else if (await IsPlaylist(url))
+            else if ((SourceTypeEnum)source.SourceType == SourceTypeEnum.PlaylistAsSeries || (SourceTypeEnum)source.SourceType == SourceTypeEnum.PlaylistAsIndividuals)
             {
-                return await GetPlaylistDownloadables(url);
+                return await GetPlaylistDownloadables(source);
             }
             else
             {
-                return await GetVideoDownloadable(url);
+                return await GetVideoDownloadable(source);
             }
         }
 

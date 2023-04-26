@@ -1,4 +1,5 @@
-﻿using ReactiveUI;
+﻿using PlexDownloader.Models;
+using ReactiveUI;
 using System.IO;
 using System.Threading.Tasks;
 using YoutubeExplode.Videos;
@@ -7,19 +8,17 @@ namespace PlexDownloader.ViewModels
 {
     public class VideoViewModel : ReactiveObject
     {
-        public Video UnderlyingVideo;
-        public IDownloadableInfo Info;
+        public Wanted UnderlyingVideo;
         private Avalonia.Media.Imaging.Bitmap _thumbnail;
         private string _title;
 
-        public VideoViewModel(Video video,IDownloadableInfo info)
+        public VideoViewModel(Wanted video)
         {
-            Info = info;
             UnderlyingVideo = video;
-            Title = video.Title;
-            Task.Run(() =>
+            Title = video.VideoTitle;
+            Task.Run(async () =>
             {
-                Stream stream = new MemoryStream(DownloadHelper.DownloadThumbnail(video));
+                Stream stream = new MemoryStream(DownloadHelper.DownloadThumbnail(await DownloadHelper.GetVideo(video.ID)));
                 Thumbnail = new Avalonia.Media.Imaging.Bitmap(stream);
             });
         }
