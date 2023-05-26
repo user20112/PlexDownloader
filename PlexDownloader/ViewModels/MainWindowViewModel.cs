@@ -24,7 +24,7 @@ namespace PlexDownloader.ViewModels
         public ObservableCollection<VideoViewModel> AwaitingDownload { get; set; } = new ObservableCollection<VideoViewModel>();
 
         public static string JsonSaveLocation = Path.Combine(Directory.GetParent(System.Reflection.Assembly.GetEntryAssembly().Location).FullName, "Queued");
-        public static string SaveLocation = "Z:\\YoutubeSeries";
+        public static string SaveLocation = "W:\\YoutubeSeries";
 
         public MainWindowViewModel()
         {

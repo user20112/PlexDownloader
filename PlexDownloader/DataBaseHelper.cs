@@ -18,7 +18,7 @@ namespace PlexDownloader
             {
                 _sqlite_conn = new SQLiteConnection("Data Source=database.db; Version = 3; Compress = True; ");
                 _sqlite_conn.Open();
-                DropTables();
+                //DropTables();
                 CreateTable();
             }
         }
@@ -233,7 +233,7 @@ WHERE detecteds.SourceID=" + sourceID + @" and NOT EXISTS (
         internal static void AddDownloaded(Wanted underlyingVideo, string downloadedPath)
         {
             using var command = new SQLiteCommand(_sqlite_conn);
-            command.CommandText = @"INSERT INTO wanteds (ID, SourceID, VideoTitle, ChannelName, PlaylistName, IndexInPlaylist, FilePath)
+            command.CommandText = @"INSERT INTO downloadeds (ID, SourceID, VideoTitle, ChannelName, PlaylistName, IndexInPlaylist, FilePath)
                         VALUES (@ID, @SourceID, @VideoTitle, @ChannelName, @PlaylistName, @IndexInPlaylist, @FilePath)";
 
             // Bind the parameter values

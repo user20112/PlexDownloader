@@ -47,8 +47,8 @@ namespace PlexDownloader
         }
         public static async Task<string> DownloadVideo(string url, string filePath, IProgress<double> progressProvider)
         {
-            if (File.Exists(filePath))
-                File.Delete(filePath);
+            if (File.Exists(filePath + ".mp4"))
+                return filePath + ".mp4";
             if (!Directory.Exists(Path.GetDirectoryName(filePath)))
                 Directory.CreateDirectory(Path.GetDirectoryName(filePath));
             await Client.Videos.DownloadAsync(url, filePath + ".mp4", progressProvider);
